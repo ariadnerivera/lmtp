@@ -104,3 +104,19 @@ current_trt <- function(trt, time) {
   }
   trt[[1]]
 }
+
+  
+# Outcome-regression conditioning set including the cluster exposure (V) active
+# through the time point whose parents are being modelled.
+outcome_history <- function(task, time) {
+  unique(c(task$vars$history("L", time + 1), task$vars$cluster_cols_through(time)))
+}
+  
+# Columns set to their shifted values when predicting the outcome under the
+# intervention: the unit exposure A_t and (if present) the cluster exposure V_t.
+shift_targets <- function(task, time) {
+  A_t <- current_trt(task$vars$A, time)
+  if (is.null(task$vars$V)) return(A_t)
+  c(A_t, current_trt(task$vars$V, time))
+}
+

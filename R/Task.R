@@ -13,13 +13,19 @@ LmtpTask <- R6::R6Class(
     folds = NULL,
     weights = NULL,
     initialize = function(data, shifted, A, Y, L, W, C, D, k,
-                          id, outcome_type, bounds, folds, weights) {
+                          id, outcome_type, bounds, folds, weights, V = NULL) {
       # Identify the time horizon
       self$time_horizon <- private$time_horizon_is(Y, A)
       self$n <- nrow(data)
 
       # Create Vars object
-      self$vars <- LmtpVars$new(W, L, A, C, D, Y, outcome_type, self$time_horizon, k)
+      self$vars <- LmtpVars$new(W, L, A, C, D, Y, outcome_type, self$time_horizon, k, V = V)
+      
+      # A cluster-level exposure requires a cluster identifier
+      if (!is.null(V) && is.null(id)) {
+        stop("`id` (cluster identifier) must be supplied when a cluster-level exposure is used.",
+             call. = FALSE)
+      }
 
       # Additional checks
       assert_numeric(weights, len = nrow(data), finite = TRUE, any.missing = FALSE, null.ok = TRUE)
@@ -44,6 +50,14 @@ LmtpTask <- R6::R6Class(
       self$shifted <- private$as_lmtp_data(shifted)
 
       assert_lmtp_data(self)
+      
+      # The cluster-level exposure must be constant within each cluster in both
+      # the observed and shifted data; otherwise the cluster-level density-ratio
+      # factorization is not well defined.
+      if (!is.null(self$vars$V)) {
+        private$assert_cluster_constant(self$natural, "data")
+        private$assert_cluster_constant(self$shifted, "shifted")
+      }
 
       # Make folds for cross-fitting
       self$folds <- private$make_folds(folds)
@@ -122,6 +136,18 @@ LmtpTask <- R6::R6Class(
   ),
   private = list(
     bounds = NULL,
+    assert_cluster_constant = function(data, which) {
+      Vcols <- unlist(self$vars$V)
+      id <- data$..i..lmtp_id
+      for (v in Vcols) {
+        n_unique <- tapply(data[[v]], id, function(x) length(unique(x[!is.na(x)])))
+        if (any(n_unique > 1, na.rm = TRUE)) {
+          stop(sprintf("Cluster-level exposure '%s' is not constant within `id` in `%s`.",
+                       v, which), call. = FALSE)
+        }
+      }
+      invisible(TRUE)
+    },
     time_horizon_is = function(Y, A) {
       if (!(length(Y) > 1)) {
         return(length(A))

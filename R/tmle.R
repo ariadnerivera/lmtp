@@ -38,7 +38,7 @@ estimate_tmle <- function(task, fold, density_ratios, learners, control, progres
     c1 <- task$observed(natural$train, time)
     i <- c1 %and% (y1 & d0)
 
-    history <- task$vars$history("L", time + 1)
+    history <- outcome_history(task, time)
     vars <- c("..i..lmtp_id", history, task$vars$Y)
 
     fit <- run_ensemble(natural$train[i, vars], task$vars$Y,
@@ -55,8 +55,8 @@ estimate_tmle <- function(task, fold, density_ratios, learners, control, progres
       fits[[time]] <- extract_sl_weights(fit)
     }
 
-    A_t <- current_trt(task$vars$A, time)
-
+    A_t <- shift_targets(task, time)
+    
     cp1 <- task$observed(natural$train, time - 1)
     y1v <- task$is_outcome_free(natural$valid, time - 1)
     d0v <- task$is_competing_risk_free(natural$valid, time - 1)

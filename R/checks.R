@@ -5,13 +5,14 @@ check_lmtp_data = function(task) {
     i <- o %and% r
 
     A_t <- current_trt(task$vars$A, time)
-
+    V_t <- task$vars$cluster_cols_through(time)
+    
     all_covars <- unique(c(task$vars$W, task$vars$W_trt, task$vars$W_cens,
-                            unlist(task$vars$L[time]),
-                            unlist(task$vars$L_trt[time]),
-                            unlist(task$vars$L_cens[time])))
-    data_t <- task$natural[i, c(A_t, all_covars), drop = FALSE]
-
+                           unlist(task$vars$L[time]),
+                           unlist(task$vars$L_trt[time]),
+                           unlist(task$vars$L_cens[time])))
+    data_t <- task$natural[i, c(A_t, V_t, all_covars), drop = FALSE]
+    
     if (any(is.na(data_t))) {
       return("Missing data found in treatment and/or covariate nodes for uncensored observations")
     }

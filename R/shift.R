@@ -1,12 +1,19 @@
-make_shifted <- function(data, trt, cens, shift, shifted) {
+make_shifted <- function(data, trt, cens, shift, shifted, cluster = NULL) {
   assert_function(shift, nargs = 2, null.ok = TRUE)
-
+  
   if (!is.null(shifted)) {
-    assert_correctly_shifted(data, shifted, trt, cens)
+    assert_correctly_shifted(data, shifted, c(trt, cluster), cens)
     return(shifted)
   }
-
-  shift_data(data, trt, shift)
+  
+  out <- shift_data(data, trt, shift)
+  # The cluster-level exposure is shifted with the same user-supplied shift
+  # function. The function is expected to recognize the cluster exposure's
+  # column name(s); alternatively the user can pass a pre-computed `shifted`.
+  if (!is.null(cluster)) {
+    out <- shift_data(out, cluster, shift)
+  }
+  out
 }
 
 shift_data <- function(data, trt, shift) {
