@@ -137,13 +137,18 @@ LmtpTask <- R6::R6Class(
   private = list(
     bounds = NULL,
     assert_cluster_constant = function(data, which) {
-      Vcols <- unlist(self$vars$V)
-      id <- data$..i..lmtp_id
-      for (v in Vcols) {
+      id <- droplevels(as.factor(data[["..i..lmtp_id"]]))
+      cluster_vars <- unique(c(unlist(self$vars$V),
+                               self$vars$W_cluster,
+                               unlist(self$vars$L_cluster)))
+      for (v in cluster_vars) { #For every variable declared as cluster-level, does every patient within the same state have the same nonmissing value?
         n_unique <- tapply(data[[v]], id, function(x) length(unique(x[!is.na(x)])))
-        if (any(n_unique > 1, na.rm = TRUE)) {
-          stop(sprintf("Cluster-level exposure '%s' is not constant within `id` in `%s`.",
-                       v, which), call. = FALSE)
+        bad <- names(n_unique)[!is.na(n_unique) & n_unique != 1L]
+        if (length(bad)) {
+          stop(sprintf(paste0("State-level variable '%s' must have exactly one non-missing ",
+                              "value within every `id` in `%s`. Problem ids: %s."),
+                       v, which, paste(bad[seq_len(min(5L, length(bad)))], collapse = ", ")),
+               call. = FALSE)
         }
       }
       invisible(TRUE)
@@ -163,7 +168,7 @@ LmtpTask <- R6::R6Class(
     },
 
     make_folds = function(V) {
-      id <- self$natural$._lmtp_id
+      id <- self$natural[["..i..lmtp_id"]]
 
       if (length(unique(id)) == self$n & self$outcome_type == "binomial") {
         strata <- self$natural[[final_outcome(self$vars$Y)]]

@@ -1,17 +1,32 @@
-make_shifted <- function(data, trt, cens, shift, shifted, cluster = NULL) {
+make_shifted <- function(data, trt, cens, shift, shifted, cluster = NULL,
+                         shift_cluster = NULL,
+                         patient_shift_uses_shifted_cluster = FALSE) {
   assert_function(shift, nargs = 2, null.ok = TRUE)
+  assert_function(shift_cluster, nargs = 2, null.ok = TRUE)
   
   if (!is.null(shifted)) {
-    assert_correctly_shifted(data, shifted, c(trt, cluster), cens)
+    assert_correctly_shifted(data, shifted, c(unlist(trt), unlist(cluster)), cens)
     return(shifted)
   }
   
-  out <- shift_data(data, trt, shift)
-  # The cluster-level exposure is shifted with the same user-supplied shift
-  # function. The function is expected to recognize the cluster exposure's
-  # column name(s); alternatively the user can pass a pre-computed `shifted`.
-  if (!is.null(cluster)) {
-    out <- shift_data(out, cluster, shift)
+  if (is.null(cluster)) {
+    return(shift_data(data, trt, shift))
+  }
+  
+  if (is.null(shift_cluster)) {
+    stop("`shift_cluster` must be supplied when `cluster` is supplied, unless a ",
+         "precomputed `shifted` data frame is used.", call. = FALSE)
+  }
+  
+  if (isTRUE(patient_shift_uses_shifted_cluster)) {
+    # V is intervened on first; the A policy sees V^d.
+    out <- shift_data(data, cluster, shift_cluster)
+    out <- shift_data(out, trt, shift)
+  } else {
+    # A policy uses the natural V (lmtp's usual convention).
+    out <- shift_data(data, trt, shift)
+    shifted_V <- shift_data(data, cluster, shift_cluster)
+    out[, unlist(cluster)] <- shifted_V[, unlist(cluster), drop = FALSE]
   }
   out
 }
@@ -42,6 +57,13 @@ shift_trt_list <- function(data, trt, .f) {
   out <- as.list(data)
   for (a in trt) {
     new <- .f(data, a)
+    if (!is.list(new) && !is.data.frame(new)) {
+      if (length(a) != 1L) {
+        stop("A shift function for a multivariate exposure node must return a named ",
+             "list or data.frame with one element per column.", call. = FALSE)
+      }
+      new <- stats::setNames(list(new), a)
+    }
     for (col in a) {
       out[[col]] <- new[[col]]
     }

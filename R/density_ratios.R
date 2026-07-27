@@ -69,14 +69,11 @@ estimate_density_ratios <- function(task, fold, learners, mtp, control, pb) {
     cluster_fit <- NULL
     cluster_ratio <- rep(1, nrow(natural$valid))
     if (!is.null(task$vars$V)) {
-      # H_c for the V model: explicit cluster set if supplied, else auto-detected.
-      if (task$vars$has_cluster_covs()) {
-        cluster_cov_pool <- unique(c(task$vars$history_cluster(time),
-                                     task$vars$cluster_cols_through(time - 1)))
-      } else {
-        cluster_cov_pool <- unique(c(task$vars$history("A", time),
-                                     task$vars$cluster_cols_through(time - 1)))
-      }
+      # H_c for the V model: ONLY the explicitly declared state-level covariate
+      # set. No auto-detection: with 25 clusters a variable must not be treated
+      # as state-level merely because it happens to be constant in one fold.
+      cluster_cov_pool <- unique(c(task$vars$history_cluster(time),
+                                   task$vars$cluster_cols_through(time - 1)))
       
       cluster_out <- estimate_cluster_ratio(
         natural_train = natural$train, shifted_train = shifted$train,
@@ -134,34 +131,30 @@ estimate_cluster_ratio <- function(natural_train, shifted_train,
   nt <- natural_train[i_train, , drop = FALSE]
   st <- shifted_train[i_train, , drop = FALSE]
   
-  # Cluster-level covariates = covariates in the pool that are constant within
-  # cluster (genuinely cluster level). Detected on the training data.
-  is_constant <- function(d, cols) {
-    vapply(cols, function(v) {
-      all(tapply(d[[v]], d[[id_col]], function(x) length(unique(x[!is.na(x)])) <= 1))
-    }, logical(1))
-  }
-  cov_pool <- setdiff(unique(cov_pool), V_t)
-  Ccov <- if (length(cov_pool)) cov_pool[is_constant(nt, cov_pool)] else character(0)
+  # Conditioning set is exactly what the user declared as state-level.
+  Ccov <- setdiff(unique(cov_pool), V_t)
+  Ccov <- Ccov[!is.na(Ccov)]
   
   if (length(Ccov) == 0) {
-    warning("No cluster-constant covariates available for the cluster-exposure model; ",
-            "estimating an unconditional (marginal) cluster density ratio. Include ",
-            "cluster-level confounders (e.g., cluster summaries) in `baseline`/`time_vary` ",
-            "to condition on them.", call. = FALSE)
+    message("No state-level covariates declared for the V model; estimating the ",
+            "marginal density ratio g*(V) / g(V).")
   }
   
-  # Collapse to one row per cluster (V_t and Ccov are constant within cluster).
+  # Collapse to one row per cluster. nt and st share row order and ids,
+  # so ONE keep index serves both.
+  keep <- !duplicated(nt[[id_col]])
+  nat_c <- nt[keep, c(id_col, Ccov, V_t), drop = FALSE]
+  shi_c <- nat_c
+  shi_c[, V_t] <- st[keep, V_t]
+  rownames(nat_c) <- NULL
+  rownames(shi_c) <- NULL
+  
   first_by_id <- function(d, cols) {
-    keep <- !duplicated(d[[id_col]])
-    out <- d[keep, c(id_col, cols), drop = FALSE]
+    k <- !duplicated(d[[id_col]])
+    out <- d[k, c(id_col, cols), drop = FALSE]
     rownames(out) <- NULL
     out
   }
-  
-  nat_c <- first_by_id(nt, c(Ccov, V_t))
-  shi_c <- nat_c
-  shi_c[, V_t] <- first_by_id(st, V_t)[, V_t]
   
   stacked <- rbind(nat_c, shi_c)
   stacked[["..i..lmtp_stack_indicator"]] <- rep(c(0, 1), each = nrow(nat_c))

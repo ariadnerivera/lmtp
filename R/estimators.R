@@ -91,7 +91,9 @@
 #' @example inst/examples/tmle-ex.R
 #' @export
 lmtp_tmle <- function(data, trt, outcome, baseline = NULL, time_vary = NULL,
-                      cens = NULL, compete = NULL, cluster = NULL, shift = NULL, shifted = NULL,
+                      cens = NULL, compete = NULL, cluster = NULL,
+                      shift = NULL, shift_cluster = NULL, shifted = NULL,
+                      patient_shift_uses_shifted_cluster = FALSE,
                       k = Inf, mtp = TRUE,
                       outcome_type = c("binomial", "continuous", "survival"),
                       id = NULL, bounds = NULL,
@@ -100,6 +102,7 @@ lmtp_tmle <- function(data, trt, outcome, baseline = NULL, time_vary = NULL,
                       folds = 10, weights = NULL,
                       control = lmtp_control()) {
   assert_not_data_table(data)
+  cluster <- normalize_cluster_exposure(cluster)
   variable_names <- c(unlist(trt), unlist(cluster), outcome, unique(unlist(baseline)), unique(unlist(time_vary)), cens, compete, id)
   assert_subset(variable_names, names(data))
   assert_outcome_types(data, outcome, match.arg(outcome_type))
@@ -110,7 +113,9 @@ lmtp_tmle <- function(data, trt, outcome, baseline = NULL, time_vary = NULL,
 
   task <- LmtpTask$new(
     data = data,
-    shifted = make_shifted(data[, variable_names], trt, cens, shift, shifted, cluster),
+    shifted = make_shifted(data[, variable_names], trt, cens, shift, shifted, cluster,
+                           shift_cluster = shift_cluster,
+                           patient_shift_uses_shifted_cluster = patient_shift_uses_shifted_cluster),    
     A = trt,
     V = cluster,
     Y = outcome,

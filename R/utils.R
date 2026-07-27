@@ -120,3 +120,18 @@ shift_targets <- function(task, time) {
   c(A_t, current_trt(task$vars$V, time))
 }
 
+
+# Coerce a cross-sectional cluster exposure to lmtp's one-time-point node format.
+# `cluster = c("V1","V2")` and `cluster = list(c("V1","V2"))` both become
+# list(c("V1","V2")). Applied to `cluster` ONLY - never to `trt`, because a bare
+# character vector in `trt` legitimately means one column per time point.
+normalize_cluster_exposure <- function(x) {
+  if (is.null(x)) return(NULL)
+  if (is.character(x)) return(list(x))
+  if (is.list(x) && length(x) == 1L && is.character(x[[1]])) return(x)
+  stop("`cluster` must be a character vector of column names, or a one-element ",
+       "list containing one.", call. = FALSE)
+}
+
+# Referenced by Task.R's make_folds(); was missing from the package.
+final_outcome <- function(Y) Y[length(Y)]
